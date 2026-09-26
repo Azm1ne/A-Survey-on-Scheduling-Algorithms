@@ -122,6 +122,20 @@ def main(run_dir):
         print(f"  {text:30} simulator {'yes' if s_ok else 'NO ':3}  kernel {'yes' if k_ok else 'NO '}"
               f"  -> {'HOLDS' if s_ok and k_ok else 'DIFFERS'}")
 
+    # Paper Table III: median kernel run in Table II's units (WT, RT, CS in 10^3), then tau per EEVDF variant
+    rows = {"FCFS": "fifo", "Priority": "fifo-prio", "RR (1 ms)": "rr-q1ms", "EDF": "deadline",
+            "Shipped EEVDF": "eevdf", "Matched-slice EEVDF": "eevdf-slice"}
+    k3 = lambda x: f"{x / 1e3:.2f}" if x < 1e4 else f"{x / 1e3:.1f}"
+    if set(rows.values()) <= set(median.index):
+        print("\n== Table III (median of replicates): WT, RT, CS (x10^3), J_W, J_S, miss")
+        for label, run in rows.items():
+            m = median.loc[run]
+            print(f"  {label:20} {k3(m.avg_waiting):>7} {k3(m.avg_response):>7} {m.context_switches / 1e3:>6.1f} "
+                  f"{m.wt_jain:.3f} {m.slowdown_jain:.3f} {m.miss_ratio:.3f}")
+        if len(taus):
+            med_tau = taus.groupby(["cfs_counterpart", "metric"]).tau.median().unstack()
+            print("  median tau:\n" + med_tau.round(2).to_string())
+
     # RR quantum: kernel q in ms = simulator q in units / 10
     quanta = [q for q in RR_QUANTA_MS if f"rr-q{q}ms" in median.index]
     rr = [f"rr-q{q}ms" for q in quanta]
@@ -133,9 +147,16 @@ def main(run_dir):
                           "kernel_WT": median.loc[rr, "avg_waiting"].values,
                           "sim_CS": rr_sim.loc[quanta, "context_switches"].values,
                           "kernel_CS": median.loc[rr, "context_switches"].values})
+        t["dev_%"] = (t.kernel_WT / t["sim_WT_q-1"] - 1) * 100
         print(t.to_string(index=False, float_format=fmt))
         for col in ["sim_WT", "sim_WT_q-1", "kernel_WT"]:
             print(f"  {col} spread over quanta: {(t[col].max() - t[col].min()) / t[col].mean() * 100:.2f}% of mean")
+        fine = t[t.q_ms <= 100]
+        print(f"  kernel vs sim_WT_q-1, 1-100 ms: max |dev| {fine['dev_%'].abs().max():.2f}% "
+              f"(at {fine.q_ms[fine['dev_%'].abs().idxmax()]} ms)")
+        if {1000, 1100} <= set(quanta):
+            k = t.set_index("q_ms").kernel_WT
+            print(f"  kernel 1.0 s -> 1.1 s: {k[1000]:,.0f} -> {k[1100]:,.0f} ({(k[1100] / k[1000] - 1) * 100:+.1f}%)")
 
     if "fifo-alone" in median.index:
         a, p = median.loc["fifo-alone", "avg_waiting"], median.loc["fifo", "avg_waiting"]
