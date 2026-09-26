@@ -1,0 +1,32 @@
+[2026-09-26 10:58:59] start fifo on CPUs 6 8 10
+[2026-09-26 11:12:21] done  fifo
+[2026-09-26 11:12:21] start fifo-prio on CPUs 6 8 10
+[2026-09-26 11:25:43] done  fifo-prio
+[2026-09-26 11:25:43] start deadline on CPUs 6 8 10
+[2026-09-26 11:39:05] done  deadline
+[2026-09-26 11:39:05] start eevdf on CPUs 6 8 10
+[2026-09-26 11:52:28] done  eevdf
+[2026-09-26 11:52:28] start eevdf-slice on CPUs 6 8 10
+[2026-09-26 12:05:50] done  eevdf-slice
+[2026-09-26 12:05:50] start rr-q1ms on CPUs 6 8 10
+[2026-09-26 12:19:12] done  rr-q1ms
+[2026-09-26 12:19:12] start rr-q2ms on CPUs 6 8 10
+[2026-09-26 12:32:34] done  rr-q2ms
+[2026-09-26 12:32:34] start rr-q5ms on CPUs 6 8 10
+[2026-09-26 12:45:56] done  rr-q5ms
+[2026-09-26 12:45:56] start rr-q10ms on CPUs 6 8 10
+[2026-09-26 12:59:18] done  rr-q10ms
+[2026-09-26 12:59:18] start rr-q20ms on CPUs 6 8 10
+[2026-09-26 13:12:40] done  rr-q20ms
+[2026-09-26 13:12:40] start rr-q50ms on CPUs 6 8 10
+[2026-09-26 13:26:02] done  rr-q50ms
+[2026-09-26 13:26:02] start rr-q100ms on CPUs 6 8 10
+[2026-09-26 13:39:24] done  rr-q100ms
+[2026-09-26 13:39:24] start rr-q1000ms on CPUs 6 8 10
+[2026-09-26 13:52:47] done  rr-q1000ms
+[2026-09-26 13:52:47] start rr-q1100ms on CPUs 6 8 10
+[2026-09-26 14:06:09] done  rr-q1100ms
+[2026-09-26 14:06:09] start fifo-alone on CPUs 6
+[2026-09-26 14:19:31] done  fifo-alone
+[2026-09-26 14:19:31] campaign complete: results/20260926-105859
+[2026-09-26 14:19:32] restored: rr_timeslice=100 rt_runtime=950000 dl_period_max=4194304 governor=performance

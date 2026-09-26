@@ -1,0 +1,19 @@
+cfs_counterpart,rep,metric,tau,sim_order,kernel_order
+Shipped EEVDF,1,avg_waiting,0.9999999999999999,EDF < FCFS < Priority < Round Robin < CFS,EDF < FCFS < Priority < Round Robin < CFS
+Shipped EEVDF,1,avg_turnaround,0.9999999999999999,EDF < FCFS < Priority < Round Robin < CFS,EDF < FCFS < Priority < Round Robin < CFS
+Shipped EEVDF,1,avg_response,0.7999999999999999,CFS < Round Robin < EDF < FCFS < Priority,Round Robin < CFS < EDF < FCFS < Priority
+Shipped EEVDF,2,avg_waiting,0.9999999999999999,EDF < FCFS < Priority < Round Robin < CFS,EDF < FCFS < Priority < Round Robin < CFS
+Shipped EEVDF,2,avg_turnaround,0.9999999999999999,EDF < FCFS < Priority < Round Robin < CFS,EDF < FCFS < Priority < Round Robin < CFS
+Shipped EEVDF,2,avg_response,0.7999999999999999,CFS < Round Robin < EDF < FCFS < Priority,Round Robin < CFS < EDF < FCFS < Priority
+Shipped EEVDF,3,avg_waiting,0.9999999999999999,EDF < FCFS < Priority < Round Robin < CFS,EDF < FCFS < Priority < Round Robin < CFS
+Shipped EEVDF,3,avg_turnaround,0.9999999999999999,EDF < FCFS < Priority < Round Robin < CFS,EDF < FCFS < Priority < Round Robin < CFS
+Shipped EEVDF,3,avg_response,0.7999999999999999,CFS < Round Robin < EDF < FCFS < Priority,Round Robin < CFS < EDF < FCFS < Priority
+Matched-slice EEVDF,1,avg_waiting,0.9999999999999999,EDF < FCFS < Priority < Round Robin < CFS,EDF < FCFS < Priority < Round Robin < CFS
+Matched-slice EEVDF,1,avg_turnaround,0.9999999999999999,EDF < FCFS < Priority < Round Robin < CFS,EDF < FCFS < Priority < Round Robin < CFS
+Matched-slice EEVDF,1,avg_response,0.9999999999999999,CFS < Round Robin < EDF < FCFS < Priority,CFS < Round Robin < EDF < FCFS < Priority
+Matched-slice EEVDF,2,avg_waiting,0.9999999999999999,EDF < FCFS < Priority < Round Robin < CFS,EDF < FCFS < Priority < Round Robin < CFS
+Matched-slice EEVDF,2,avg_turnaround,0.9999999999999999,EDF < FCFS < Priority < Round Robin < CFS,EDF < FCFS < Priority < Round Robin < CFS
+Matched-slice EEVDF,2,avg_response,0.9999999999999999,CFS < Round Robin < EDF < FCFS < Priority,CFS < Round Robin < EDF < FCFS < Priority
+Matched-slice EEVDF,3,avg_waiting,0.9999999999999999,EDF < FCFS < Priority < Round Robin < CFS,EDF < FCFS < Priority < Round Robin < CFS
+Matched-slice EEVDF,3,avg_turnaround,0.9999999999999999,EDF < FCFS < Priority < Round Robin < CFS,EDF < FCFS < Priority < Round Robin < CFS
+Matched-slice EEVDF,3,avg_response,0.9999999999999999,CFS < Round Robin < EDF < FCFS < Priority,CFS < Round Robin < EDF < FCFS < Priority
