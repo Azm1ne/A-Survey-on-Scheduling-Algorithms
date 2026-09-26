@@ -64,13 +64,13 @@ arrow((1.09, top + h1 / 2), (1.22, top + h1 / 2))
 arrow((2.28, top + h1 / 2), (2.41, top + h1 / 2))
 
 box(0.03, wy, 3.44, h2, "Workload model (seed 42)",
-    r"500 jobs; arrivals $\div10^{7}$, bursts $\times10^{4}$ $\rightarrow$ offered load $\rho=30$" "\n"
+    r"500 jobs; arrivals $\div$ 10,000,000, bursts $\times$ 10,000 $\rightarrow$ load $\rho=30$" "\n"
     r"synthetic deadlines $D=(1+s)\,b$, $s\sim U(0.5,2)$", PALETTE["neutral"], PALETTE["ink"])
 arrow((2.94, top), (2.94, wy + h2))
 
 box(0.03, by, 1.66, h3, "Simulator (one core)",
     "FCFS, SJF, RR, Priority,\nMLQ, MLFQ, EDF, CFS\n" r"load sweep $\rho=0.5$–30" "\n"
-    r"RR quantum $q=1$–$10^{6}$", PALETTE["green_1"], "#2E7D32")
+    r"RR quantum $q$ = 1 to 1M", PALETTE["green_1"], "#2E7D32")
 box(1.81, by, 1.66, h3, "Kernel Baseline (Linux 7.0)",
     "SCHED_FIFO, SCHED_RR,\nSCHED_DEADLINE, EEVDF\n(2 slices); 3 replicates\n"
     "1 unit = 100 µs of CPU", PALETTE["red_1"], PALETTE["red_strong"])

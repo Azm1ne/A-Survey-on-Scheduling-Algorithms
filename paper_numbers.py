@@ -7,13 +7,14 @@ notebook's own policy functions, load_sweep.csv, and the trace CSV (same path va
 so every value comes from the code and data that produced Tables II and IV.
 """
 import ast
+import json
 import os
 import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from scipy.stats import spearmanr
+from scipy.stats import kendalltau, spearmanr
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE / "kernel"))
@@ -60,7 +61,8 @@ for q in [5_000, 9_000, 9_990, 10_000, 10_010, 11_000, 15_000, 20_000, 30_000]:
 # Same cleaning, in the same order, as the notebook's Section 2, so row positions (and the seed-42 draw) match.
 t = pd.read_csv(os.environ.get("BORG_CSV", "/kaggle/input/datasets/derrickmwiti/google-2019-cluster-sample/"
                                             "borg_traces_data.csv"),
-                usecols=["collection_id", "instance_index", "start_time", "end_time", "average_usage", "failed"])
+                usecols=["collection_id", "instance_index", "start_time", "end_time", "priority", "average_usage",
+                         "failed"])
 t = t.dropna(subset=["instance_index", "start_time", "end_time", "average_usage"])
 t = t[(t.failed == 0) & (t.end_time > t.start_time)]
 t = t.assign(u=t.average_usage.map(lambda x: ast.literal_eval(x)["cpus"] if isinstance(x, str) else np.nan))
@@ -95,8 +97,143 @@ print(f"Kernel time scale: bursts {w.Burst_Time.min() * UNIT_S:.0f}-{w.Burst_Tim
       f"(modal {modal * UNIT_S:.0f} s), all arrivals within {w.Arrival_Time.max() * UNIT_S:.1f} s, "
       f"relative deadline {laxity.min():.2f}-{laxity.max():.2f} x burst")
 
-# --- Comparison with Wierman & Harchol-Balter: slowdown Jain below saturation (load_sweep.csv, 5 seeds) ---
+# --- Streams for other seeds and loads: the notebook's own make_workload, on the same cleaned rows -----------
+nb = json.loads((HERE / "cpu-scheduling-algorithm-comparison.ipynb").read_text())
+ns = simulator()
+ns["scheduler_df"] = t.rename(columns={"instance_index": "PID", "start_time": "Arrival_Time", "b": "Burst_Time",
+                                       "priority": "Priority"})[["PID", "Arrival_Time", "Burst_Time", "Priority"]]
+exec(next("".join(c["source"]) for c in nb["cells"] if "".join(c["source"]).startswith("def make_workload"))
+     .split("# Reproducible")[0], ns)
+make_workload = ns["make_workload"]
+assert np.allclose(make_workload(42)[w.columns], w), "make_workload(42) != kernel/workload_seed42.csv"
+POLICIES = {"FCFS": "fcfs", "SJF": "sjf", "RR": "round_robin", "Priority": "priority_sched",
+            "MLQ": "multilevel_queue", "MLFQ": "mlfq", "EDF": "edf", "CFS": "cfs"}
+SEEDS = range(42, 47)
 ls = pd.read_csv(HERE / "load_sweep.csv")
+
+
+def run_all(w):
+    return pd.DataFrame({name: ns[f](w) for name, f in POLICIES.items()}).T
+
+
+# Why the orderings persist below saturation: arrivals cluster, so many jobs still find the core busy.
+# Busy periods are the same for every work-conserving policy; FCFS order gives them in one pass.
+print("\nBelow saturation (median over seeds 42-46):")
+for r in [0.5, 0.9]:
+    busy, queue = [], []
+    for seed in SEEDS:
+        v = make_workload(seed, r)
+        a, b = v.Arrival_Time.to_numpy(), v.Burst_Time.to_numpy()
+        f = np.empty_like(a)                                   # FCFS finish times (arrival order)
+        end = 0
+        for k in range(len(a)):
+            end = max(end, a[k]) + b[k]
+            f[k] = end
+        waiting = np.array([((a <= a[j]) & (f > a[j])).sum() - 1 for j in range(len(a))])  # jobs ahead of j
+        busy.append((waiting > 0).mean())
+        queue.append(waiting[waiting > 0].mean())
+    print(f"  rho = {r}: {np.median(busy) * 100:.0f}% of jobs arrive to a busy core, "
+          f"finding {np.median(queue):.1f} jobs ahead on average")
+
+# Deadline-model sensitivity (the trace has no deadlines): only EDF's schedule and the miss ratios depend on them.
+DEADLINES = {"tight U(0.1,1)": (0.1, 1.0, True), "paper U(0.5,2)": (0.5, 2.0, True),
+             "loose U(2,5)": (2.0, 5.0, True), "size-blind (1+U(0.5,2))*mean": (0.5, 2.0, False)}
+
+
+def with_deadlines(v, seed, lo, hi, proportional):
+    s = np.random.default_rng(seed).uniform(lo, hi, size=len(v))  # same draw order as make_workload
+    base = v.Burst_Time if proportional else v.Burst_Time.mean()
+    return v.assign(Deadline=v.Arrival_Time + (1 + s) * base)
+
+
+print("\nDeadline models (EDF WT rank of 8 at rho = 30, seed 42; miss ratios: median over seeds 42-46):")
+table2 = run_all(w)
+for label, (lo, hi, prop) in DEADLINES.items():
+    edf30 = ns["edf"](with_deadlines(w, 42, lo, hi, prop))
+    alt = table2.copy()
+    alt.loc["EDF"] = pd.Series(edf30)
+    taus = [kendalltau(table2[k].astype(float), alt[k].astype(float)).statistic for k in ("avg_waiting", "avg_response")]
+    out = (f"  {label:<30} EDF WT {edf30['avg_waiting'] / 1e3:,.1f}x10^3 "
+           f"({(1 - edf30['avg_waiting'] / table2.loc['FCFS', 'avg_waiting']) * 100:.1f}% below FCFS),"
+           f" tau vs paper model WT {taus[0]:.2f} RT {taus[1]:.2f}")
+    for r in [0.5, 0.9]:
+        m = pd.DataFrame([run_all(with_deadlines(make_workload(seed, r), seed, lo, hi, prop)).miss_ratio
+                          for seed in SEEDS]).median()
+        out += f"; rho {r}: EDF miss {m['EDF']:.2f}, best {m.min():.2f} ({m.idxmin()})"
+    print(out)
+
+
+def errdtq(df):
+    """ERRDTQ, Zohora et al. [11], Alg. 1: the ready queue is sorted by remaining burst and the quantum QT is its
+    80th-percentile element, recomputed when a job arrives or finishes. The shortest job runs for up to QT. An arrival
+    preempts the running job only if it still needs more than QT/3 and the shortest queued job needs at most QT/3;
+    otherwise the running job keeps executing for QT."""
+    jobs = df.sort_values("Arrival_Time").to_dict("records")
+    n, i, time, cs = len(jobs), 0, 0, 0
+    ready, run, first, done = [], None, {}, []            # ready: [remaining, job]; run: [job, remaining, turn end]
+
+    def qt():
+        srq = sorted(x[0] for x in ready)
+        return srq[max(1, int(0.8 * len(srq) + 0.5)) - 1]
+
+    def admit():
+        nonlocal i
+        while i < n and jobs[i]["Arrival_Time"] <= time:
+            ready.append([jobs[i]["Burst_Time"], i])
+            i += 1
+
+    while len(done) < n:
+        admit()
+        if run is None:
+            if not ready:
+                time = jobs[i]["Arrival_Time"]
+                continue
+            q = qt()
+            ready.sort()
+            rem, k = ready.pop(0)
+            first.setdefault(k, time)
+            cs += 1
+            run = [k, rem, time + min(rem, q)]
+        nxt = jobs[i]["Arrival_Time"] if i < n else float("inf")
+        if nxt < run[2]:                                  # an arrival: re-evaluate (Alg. 1, steps 10-22)
+            run[1] -= nxt - time
+            time = nxt
+            admit()
+            q = qt()
+            if run[1] > q / 3 and min(ready)[0] <= q / 3:
+                ready.append([run[1], run[0]])
+                run = None
+            else:
+                run[2] = time + min(run[1], q)
+            continue
+        run[1] -= run[2] - time
+        time = run[2]
+        k = run[0]
+        if run[1] == 0:
+            j = jobs[k]
+            done.append({"arrival": j["Arrival_Time"], "start": first[k], "finish": time,
+                         "burst": j["Burst_Time"], "deadline": j["Deadline"]})
+        else:
+            ready.append([run[1], k])
+        run = None
+    return ns["compute_metrics"](done, context_switches=cs)
+
+
+e = errdtq(w)
+assert e["throughput"] == table2.loc["FCFS", "throughput"]         # work-conserving: same makespan as Table II
+same = all(np.isclose(e[k], table2.loc["SJF", k]) for k in ("avg_waiting", "avg_response", "context_switches"))
+print(f"\nAt rho = 30 ERRDTQ {'equals' if same else 'differs from'} SJF on WT, RT and CS")
+print("\nERRDTQ [11] on the seed-42 stream (units of Table II): "
+      f"WT {e['avg_waiting'] / 1e3:.1f}, RT {e['avg_response'] / 1e3:.1f}, CS {e['context_switches'] / 1e3:.1f}, "
+      f"J_W {e['wt_jain']:.3f}, J_S {e['slowdown_jain']:.3f}, miss {e['miss_ratio']:.3f}")
+for r in [0.5, 0.9]:
+    v = pd.DataFrame([{**errdtq(make_workload(seed, r)), "seed": seed} for seed in SEEDS]).median()
+    sw = ls[ls.rho == r].groupby("policy").avg_waiting.median()  # load_sweep.csv: the 8 policies, same 5 seeds
+    print(f"  rho = {r} (median, 5 seeds): WT {v.avg_waiting:,.0f} (SJF {sw['SJF']:,.0f}, best of 8 {sw.min():,.0f} "
+          f"{sw.idxmin()}; ERRDTQ {(1 - v.avg_waiting / sw['SJF']) * 100:.0f}% below SJF), RT {v.avg_response:,.0f}, "
+          f"miss {v.miss_ratio:.2f}")
+
+# --- Comparison with Wierman & Harchol-Balter: slowdown Jain below saturation (load_sweep.csv, 5 seeds) ---
 sj = ls[ls.rho < 1].groupby(["rho", "policy"]).slowdown_jain.median().unstack()
 print("\nMedian slowdown Jain below saturation (top three per load):")
 for r, row in sj.iterrows():
@@ -113,6 +250,8 @@ plt.rcParams.update({"pdf.fonttype": 42, "ps.fonttype": 42, "font.family": ["Lib
                      "font.size": 8, "axes.titlesize": 8, "axes.labelsize": 8, "xtick.labelsize": 8,
                      "ytick.labelsize": 8, "figure.constrained_layout.use": True})
 LINE, INK = "#2a78d6", "#52514e"
+# Tick labels 1, 100, 10k, 1M: plain 8 pt text, no 5.6 pt superscripts
+SI = matplotlib.ticker.FuncFormatter(lambda x, _: f"{x:g}" if x < 1e3 else f"{x / 1e3:g}k" if x < 1e6 else f"{x / 1e6:g}M")
 
 
 def style(ax):
@@ -162,7 +301,7 @@ ax.annotate("best: q = b", (10_000, 3.02), (30, 1.4), color=INK,
 ax.set_xscale("log")
 ax.set_ylim(0, 6.5)
 ax.set_xlabel("Quantum q (units, log)")
-ax.set_title("Mean waiting time (×10⁶ units)", loc="left", pad=3)
+ax.set_title("Mean waiting time (millions of units)", loc="left", pad=3)
 ax2.plot(qs, cs, color=LINE, linewidth=0.8)
 ax2.set_xscale("log")
 ax2.set_yscale("log")
@@ -172,7 +311,9 @@ ax2.set_title("Context switches", loc="left", pad=3)
 for a in (ax, ax2):
     a.set_xticks([1, 1e2, 1e4, 1e6])
     a.xaxis.set_minor_locator(matplotlib.ticker.NullLocator())
+    a.xaxis.set_major_formatter(SI)
     style(a)
+ax2.yaxis.set_major_formatter(SI)
 save(fig, "rr_sawtooth")
 
 # Arrival clustering: load in a sliding window of 1% of the arrival span, at rho = 0.5
